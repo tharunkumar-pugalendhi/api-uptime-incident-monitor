@@ -21,7 +21,7 @@ async def check_single_endpoint(endpoint_id: int):
 
     start = time.perf_counter()
     try:
-        async with httpx.AsyncClient(timeout=8.0, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
             resp = await client.get(url, headers={"User-Agent": "APIPulseMonitor/1.0"})
             latency_ms = round((time.perf_counter() - start) * 1000, 1)
             status_code = resp.status_code
