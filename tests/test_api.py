@@ -210,6 +210,12 @@ async def test_lifespan_initializes_and_cancels_background_task(monkeypatch):
         def cancel(self):
             cancel_called.append(True)
 
+        def __await__(self):
+            async def wait():
+                return None
+
+            return wait().__await__()
+
     monkeypatch.setattr(
         main,
         "init_db",
@@ -258,3 +264,24 @@ async def test_background_monitor_loop_handles_errors(monkeypatch):
         await main.background_monitor_loop()
 
     assert check_called == [True]
+
+
+
+@pytest.mark.anyio
+async def test_lifespan_initializes_and_stops_task(monkeypatch):
+    init_called = []
+
+    async def fake_background_loop():
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(
+        main, "init_db", lambda: init_called.append(True)
+    )
+    monkeypatch.setattr(
+        main, "background_monitor_loop", fake_background_loop
+    )
+
+    async with main.lifespan(main.app):
+        assert init_called == [True]
+
+    assert init_called == [True]

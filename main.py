@@ -5,21 +5,42 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, HttpUrl, Field
 from database import init_db, get_conn, fetch_dashboard_data
 from monitor import check_all_endpoints, check_single_endpoint
+import logging
+from contextlib import asynccontextmanager, suppress
+
+logger = logging.getLogger(__name__)
 
 async def background_monitor_loop():
     while True:
         try:
             await check_all_endpoints()
+        except asyncio.CancelledError:
+            logger.info("Background monitoring task cancelled")
+            raise
         except Exception:
-            pass
+            logger.exception("Background monitoring cycle failed")
+
         await asyncio.sleep(60)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    logger.info("Database initialized")
+
     task = asyncio.create_task(background_monitor_loop())
-    yield
-    task.cancel()
+
+    try:
+        yield
+    finally:
+        logger.info("Stopping background monitoring task")
+        task.cancel()
+
+        with suppress(asyncio.CancelledError):
+            await task
+
+        logger.info("Background monitoring task stopped")
+
 
 app = FastAPI(title="API Pulse — Real-Time Uptime & Incident Monitor", lifespan=lifespan)
 

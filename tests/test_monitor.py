@@ -379,3 +379,118 @@ async def test_nonexistent_endpoint_returns_none(test_db):
     assert log_count == 0
     assert incident_count == 0
 
+
+@pytest.mark.anyio
+async def test_connection_error_is_recorded_as_down(test_db, monkeypatch):
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def get(self, *args, **kwargs):
+            raise monitor.httpx.ConnectError("Connection refused")
+
+    monkeypatch.setattr(
+        monitor.httpx, "AsyncClient", FakeAsyncClient
+    )
+
+    result = await monitor.check_single_endpoint(1)
+
+    assert result["status"] == "DOWN"
+
+    conn = sqlite3.connect(test_db)
+    incident = conn.execute(
+        "SELECT reason FROM incidents WHERE endpoint_id = 1"
+    ).fetchone()
+    conn.close()
+
+    assert incident[0] == "Connection error: ConnectError"
+
+
+@pytest.mark.anyio
+async def test_check_all_continues_after_one_endpoint_fails(
+    test_db, monkeypatch
+):
+    conn = sqlite3.connect(test_db)
+    conn.execute(
+        "INSERT INTO endpoints (name, url, sla_ms) VALUES (?, ?, ?)",
+        ("Second API", "https://example.org", 800)
+    )
+    conn.commit()
+    conn.close()
+
+    async def fake_check_single(endpoint_id):
+        if endpoint_id == 1:
+            raise RuntimeError("Simulated database failure")
+
+        return {"id": endpoint_id, "status": "HEALTHY"}
+
+    monkeypatch.setattr(
+        monitor, "check_single_endpoint", fake_check_single
+    )
+
+    results = await monitor.check_all_endpoints()
+
+    assert results == [
+        {"id": 1, "status": "ERROR", "error": "RuntimeError"},
+        {"id": 2, "status": "HEALTHY"}
+    ]
+
+
+@pytest.mark.anyio
+async def test_database_write_failure_rolls_back(
+    test_db, monkeypatch
+):
+    conn = sqlite3.connect(test_db)
+    conn.execute("""
+        CREATE TRIGGER reject_check_log
+        BEFORE INSERT ON check_logs
+        BEGIN
+            SELECT RAISE(ABORT, 'Simulated database failure');
+        END;
+    """)
+    conn.commit()
+    conn.close()
+
+    class FakeResponse:
+        status_code = 200
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def get(self, *args, **kwargs):
+            raise monitor.httpx.ConnectError("Connection refused")
+
+    monkeypatch.setattr(
+        monitor.httpx, "AsyncClient", FakeAsyncClient
+    )
+
+    with pytest.raises(sqlite3.IntegrityError):
+        await monitor.check_single_endpoint(1)
+
+    conn = sqlite3.connect(test_db)
+
+    log_count = conn.execute(
+        "SELECT COUNT(*) FROM check_logs"
+    ).fetchone()[0]
+
+    endpoint_status = conn.execute(
+        "SELECT current_status FROM endpoints WHERE id = 1"
+    ).fetchone()[0]
+
+    conn.close()
+
+    assert log_count == 0
+    assert endpoint_status == "PENDING"
