@@ -1,4 +1,3 @@
-
 name: API Pulse CI
 
 on:
@@ -14,7 +13,7 @@ permissions:
 jobs:
   test:
     name: Run automated tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
