@@ -1,7 +1,8 @@
 import sqlite3
 from datetime import datetime, timezone
+from config import DATABASE_PATH
 
-DB_PATH = "uptime_monitor.db"
+DB_PATH = "DATABASE_PATH"
 
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)

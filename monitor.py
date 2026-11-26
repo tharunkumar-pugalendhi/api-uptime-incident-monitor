@@ -1,10 +1,9 @@
 
 import logging
 import time
-
 import httpx
-
 from database import get_conn, now_utc
+from config import HTTP_TIMEOUT_SECONDS
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +36,7 @@ async def check_single_endpoint(endpoint_id: int):
 
         try:
             async with httpx.AsyncClient(
-                timeout=8.0,
+                timeout=HTTP_TIMEOUT_SECONDS,
                 follow_redirects=False
             ) as client:
                 response = await client.get(
@@ -67,7 +66,8 @@ async def check_single_endpoint(endpoint_id: int):
                 (time.perf_counter() - start) * 1000, 1
             )
             health_status = "DOWN"
-            reason = "Request timed out (>8000ms)"
+            timeout_ms = int(HTTP_TIMEOUT_SECONDS * 1000)
+            reason = f"Request timed out (>{timeout_ms}ms)"
             logger.warning(
                 "Health check timed out for endpoint %s",
                 endpoint_id

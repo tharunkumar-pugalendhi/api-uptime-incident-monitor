@@ -7,6 +7,7 @@ from database import init_db, get_conn, fetch_dashboard_data
 from monitor import check_all_endpoints, check_single_endpoint
 import logging
 from contextlib import asynccontextmanager, suppress
+from config import MONITOR_INTERVAL_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ async def background_monitor_loop():
         except Exception:
             logger.exception("Background monitoring cycle failed")
 
-        await asyncio.sleep(60)
+        await asyncio.sleep(MONITOR_INTERVAL_SECONDS)
 
 
 @asynccontextmanager
