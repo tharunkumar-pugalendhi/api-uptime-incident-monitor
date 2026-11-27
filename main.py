@@ -1,13 +1,13 @@
 import asyncio
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager, suppress
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, HttpUrl, Field
 from database import init_db, get_conn, fetch_dashboard_data
 from monitor import check_all_endpoints, check_single_endpoint
 import logging
-from contextlib import asynccontextmanager, suppress
 from config import MONITOR_INTERVAL_SECONDS
+from rate_limiter import check_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +51,14 @@ class EndpointCreate(BaseModel):
     sla_ms: int = Field(default=800, ge=50, le=10000)
 
 @app.get("/api/status")
-def get_status():
+async def get_status(request: Request):
+    await check_rate_limit(request, "status")
     endpoints, incidents = fetch_dashboard_data()
     return {"endpoints": endpoints, "incidents": incidents}
 
 @app.post("/api/endpoints", status_code=201)
-async def create_endpoint(payload: EndpointCreate):
+async def create_endpoint(payload: EndpointCreate, request: Request):
+    await check_rate_limit(request, "create")
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
@@ -70,7 +72,8 @@ async def create_endpoint(payload: EndpointCreate):
     return {"id": new_id, "message": "Endpoint added and checked"}
 
 @app.delete("/api/endpoints/{endpoint_id}")
-def delete_endpoint(endpoint_id: int):
+async def delete_endpoint(endpoint_id: int, request: Request):
+    await check_rate_limit(request, "delete")
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM endpoints WHERE id = ?", (endpoint_id,))
@@ -82,7 +85,8 @@ def delete_endpoint(endpoint_id: int):
     return {"deleted": endpoint_id}
 
 @app.post("/api/checks/run")
-async def trigger_checks():
+async def trigger_checks(request: Request):
+    await check_rate_limit(request, "checks")
     results = await check_all_endpoints()
     return {"checked": len(results), "results": results}
 
