@@ -42,3 +42,39 @@ DATABASE_PATH=uptime_monitor.db
 ```
 
 The application validates configuration values during startup. Invalid values raise a clear configuration error.
+
+## API Rate Limiting
+
+API Pulse uses **Upstash Redis** to enforce per-IP rate limits with a sliding 60-second window.
+
+| Endpoint | Default limit |
+|---|---:|
+| `GET /api/status` | 60 requests/minute |
+| `POST /api/endpoints` | 10 requests/minute |
+| `DELETE /api/endpoints/{endpoint_id}` | 10 requests/minute |
+| `POST /api/checks/run` | 5 requests/minute |
+
+### Redis Configuration
+
+Set these environment variables in your local `.env` file and your deployment environment:
+
+```ini
+UPSTASH_REDIS_REST_URL=your_upstash_redis_rest_url
+UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_rest_token
+```
+
+You can optionally customize the limits:
+
+```ini
+RATE_LIMIT_STATUS=60
+RATE_LIMIT_CREATE=10
+RATE_LIMIT_DELETE=10
+RATE_LIMIT_CHECKS=5
+```
+
+- Requests exceeding a limit receive HTTP `429 Too Many Requests`, with a `Retry-After` header.
+- If Redis is unavailable, rate-limited requests receive HTTP `503 Service Unavailable`.
+- Local development and tests can run without Redis credentials.
+- Both Upstash credentials are required for Vercel deployments.
+
+**Security:** Never commit your `.env` file or expose your Redis credentials.

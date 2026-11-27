@@ -48,3 +48,25 @@ DATABASE_PATH = os.getenv(
 
 if not DATABASE_PATH:
     raise ValueError("DATABASE_PATH cannot be empty")
+
+# Upstash Redis configuration
+UPSTASH_REDIS_REST_URL = os.getenv(
+    "UPSTASH_REDIS_REST_URL", ""
+).strip()
+
+UPSTASH_REDIS_REST_TOKEN = os.getenv(
+    "UPSTASH_REDIS_REST_TOKEN", ""
+).strip()
+
+if bool(UPSTASH_REDIS_REST_URL) != bool(UPSTASH_REDIS_REST_TOKEN):
+    raise ValueError(
+        "Both UPSTASH_REDIS_REST_URL and "
+        "UPSTASH_REDIS_REST_TOKEN must be configured"
+    )
+
+
+# API rate limits (requests per minute)
+RATE_LIMIT_STATUS = get_positive_int("RATE_LIMIT_STATUS", 60)
+RATE_LIMIT_CREATE = get_positive_int("RATE_LIMIT_CREATE", 10)
+RATE_LIMIT_DELETE = get_positive_int("RATE_LIMIT_DELETE", 10)
+RATE_LIMIT_CHECKS = get_positive_int("RATE_LIMIT_CHECKS", 5)
